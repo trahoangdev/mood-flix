@@ -2,24 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   experimental: {
-    optimizePackageImports: ["lucide-react", "@radix-ui/react-icons"],
+    optimizePackageImports: ["lucide-react"],
   },
   turbopack: {},
-
-  // Image optimization
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'ui.shadcn.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'images.unsplash.com',
-      },
-    ],
-    formats: ['image/webp', 'image/avif'],
-  },
 
   // Headers for better security and performance
   async headers() {

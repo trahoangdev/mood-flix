@@ -12,7 +12,11 @@ export class ApiError extends Error {
   }
 }
 
-export function notFoundHandler(req: Request, _res: Response, next: NextFunction) {
+export function notFoundHandler(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+) {
   next(new ApiError(404, `Route not found: ${req.method} ${req.originalUrl}`));
 }
 
@@ -49,7 +53,8 @@ export function errorHandler(
     });
   }
 
-  const message = error instanceof Error ? error.message : "Unexpected server error";
+  const message =
+    error instanceof Error ? error.message : "Unexpected server error";
 
   return res.status(500).json({
     error: {

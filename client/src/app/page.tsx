@@ -1,22 +1,17 @@
-"use client";
-
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { SiteFooter } from "@/components/site-footer"
+import { SiteHeader } from "@/components/site-header"
+import { MoodflixDashboard } from "@/features/moodflix/moodflix-dashboard"
 
 export default function HomePage() {
-  const router = useRouter();
-
-  useEffect(() => {
-    router.replace("/dashboard");
-  }, [router]);
-
-  // Show a loading state while redirecting
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-        <p className="text-muted-foreground mt-2">Redirecting to dashboard...</p>
-      </div>
+    <div className="caldera-shell flex min-h-screen flex-col">
+      <SiteHeader />
+      <main className="flex-1">
+        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-8 px-4 py-6 lg:px-6">
+          <MoodflixDashboard />
+        </div>
+      </main>
+      <SiteFooter />
     </div>
-  );
+  )
 }

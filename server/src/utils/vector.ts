@@ -19,7 +19,10 @@ export function averageVectors(vectors: number[][]): number[] {
   return totals.map((total) => total / vectors.length);
 }
 
-export function normalizeScore(value: number | null | undefined, max: number): number {
+export function normalizeScore(
+  value: number | null | undefined,
+  max: number,
+): number {
   if (typeof value !== "number" || Number.isNaN(value) || max <= 0) {
     return 0;
   }

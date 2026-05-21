@@ -3,12 +3,14 @@ import { ObjectId } from "mongodb";
 import { z } from "zod";
 import { env } from "../config/env";
 import {
+  interactionsCollection,
   moviesCollection,
   recommendationLogsCollection,
   usersCollection,
 } from "../db/collections";
 import { ApiError } from "../middleware/error-handler";
 import type { MovieDoc } from "../models/domain";
+import { createTextEmbedding } from "./embedding-service";
 import {
   getMovieEmbedding,
   getMovieRating,
@@ -16,13 +18,23 @@ import {
   getMovieVotes,
   toRecommendedMovie,
 } from "../utils/movie-mapper";
-import { objectIdToString, parseObjectId, parseObjectIds } from "../utils/object-id";
+import {
+  objectIdToString,
+  parseObjectId,
+  parseObjectIds,
+} from "../utils/object-id";
 import { averageVectors } from "../utils/vector";
 
 export const recommendationRequestSchema = z.object({
   userId: z.string().trim().optional(),
   favoriteMovieIds: z.array(z.string().trim().min(1)).min(1).optional(),
-  limit: z.number().int().min(1).max(30).default(env.DEFAULT_RECOMMENDATION_LIMIT),
+  preferenceText: z.string().trim().min(3).max(1000).optional(),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(30)
+    .default(env.DEFAULT_RECOMMENDATION_LIMIT),
   filters: z
     .object({
       genres: z.array(z.string().trim().min(1)).max(10).optional(),
@@ -32,6 +44,16 @@ export const recommendationRequestSchema = z.object({
     })
     .default({}),
 });
+
+const scoringWeights = {
+  vector: 0.42,
+  rating: 0.12,
+  genreOverlap: 0.08,
+  popularity: 0.05,
+  collaborative: 0.33,
+} as const;
+
+const positiveInteractionActions = ["liked", "rated", "watched"] as const;
 
 export async function recommendMovies(rawBody: unknown) {
   const body = recommendationRequestSchema.parse(rawBody);
@@ -50,29 +72,38 @@ export async function recommendMovies(rawBody: unknown) {
     ...persistedFavoriteIds,
   ]);
 
-  if (favoriteMovieIds.length === 0) {
+  if (favoriteMovieIds.length === 0 && !body.preferenceText) {
     throw new ApiError(
       400,
-      "At least one favorite movie is required to generate recommendations",
+      "At least one favorite movie or preferenceText is required to generate recommendations",
     );
   }
 
-  const favoriteMovies = await collection
-    .find(
-      { _id: { $in: favoriteMovieIds } },
-      {
-        projection: {
-          title: 1,
-          genres: 1,
-          [env.MOVIE_EMBEDDING_FIELD]: 1,
-        },
-      },
-    )
-    .toArray();
+  const favoriteMovies =
+    favoriteMovieIds.length > 0
+      ? await collection
+          .find(
+            { _id: { $in: favoriteMovieIds } },
+            {
+              projection: {
+                title: 1,
+                genres: 1,
+                [env.MOVIE_EMBEDDING_FIELD]: 1,
+              },
+            },
+          )
+          .toArray()
+      : [];
 
-  const vectors = favoriteMovies
+  const favoriteMovieVectors = favoriteMovies
     .map((movie) => getMovieEmbedding(movie))
     .filter((vector): vector is number[] => Boolean(vector));
+  const preferenceTextVector = body.preferenceText
+    ? await createTextEmbedding(body.preferenceText)
+    : null;
+  const vectors = preferenceTextVector
+    ? [...favoriteMovieVectors, preferenceTextVector]
+    : favoriteMovieVectors;
 
   if (vectors.length === 0) {
     throw new ApiError(
@@ -82,30 +113,57 @@ export async function recommendMovies(rawBody: unknown) {
   }
 
   const queryVector = averageVectors(vectors);
-  const preferredGenres = buildPreferredGenres(favoriteMovies, body.filters.genres);
+  const preferredGenres = buildPreferredGenres(
+    favoriteMovies,
+    body.filters.genres,
+  );
   const excludedMovieIds = uniqueObjectIds([
     ...favoriteMovieIds,
     ...(user?.watchedMovieIds ?? []),
   ]);
+  const collaborativeUserIds = await findCollaborativeUserIds(
+    favoriteMovieIds,
+    userId,
+  );
 
+  const candidateLimit = Math.max(body.limit * 4, 24);
   const pipeline = buildRecommendationPipeline({
     queryVector,
     excludedMovieIds,
     preferredGenres,
-    limit: body.limit,
+    collaborativeUserIds,
+    limit: candidateLimit,
     filters: body.filters,
   });
 
-  const rawResults = await collection.aggregate<MovieDoc & ScoredMovie>(pipeline).toArray();
+  const [vectorResults, behavioralResults] = await Promise.all([
+    collection.aggregate<MovieDoc & ScoredMovie>(pipeline).toArray(),
+    findBehavioralCandidates({
+      favoriteMovieIds,
+      excludedMovieIds,
+      currentUserId: userId,
+      preferredGenres,
+      limit: candidateLimit,
+      filters: body.filters,
+    }),
+  ]);
+  const rawResults = mergeRecommendationCandidates(
+    vectorResults,
+    behavioralResults,
+    body.limit,
+  );
   const enrichedResults = rawResults.map((movie) =>
     addRecommendationExplanation(movie, preferredGenres),
   );
   const recommendations = enrichedResults.map(toRecommendedMovie);
 
   if (userId) {
-    await (await recommendationLogsCollection()).insertOne({
+    await (
+      await recommendationLogsCollection()
+    ).insertOne({
       _id: new ObjectId(),
       userId,
+      preferenceText: body.preferenceText,
       favoriteMovieIds,
       recommendedMovieIds: rawResults.map((movie) => movie._id),
       filters: body.filters,
@@ -116,12 +174,19 @@ export async function recommendMovies(rawBody: unknown) {
   return {
     input: {
       userId: userId ? objectIdToString(userId) : null,
+      preferenceText: body.preferenceText ?? null,
       favoriteMovies: favoriteMovies.map((movie) => ({
         id: objectIdToString(movie._id),
         title: getMovieTitle(movie),
       })),
       preferredGenres,
+      collaborativeUserCount: collaborativeUserIds.length,
       filters: body.filters,
+    },
+    scoringWeights,
+    candidateSources: {
+      vectorCandidates: vectorResults.length,
+      behavioralCandidates: behavioralResults.length,
     },
     recommendations,
   };
@@ -181,6 +246,7 @@ interface RecommendationPipelineInput {
   queryVector: number[];
   excludedMovieIds: ObjectId[];
   preferredGenres: string[];
+  collaborativeUserIds: ObjectId[];
   limit: number;
   filters: {
     genres?: string[];
@@ -197,12 +263,25 @@ interface ScoredMovie {
   ratingScore?: number;
   popularityScore?: number;
   genreOverlapScore?: number;
+  collaborativeCount?: number;
+  collaborativeScore?: number;
+  similarViewerCount?: number;
+  coLikeCount?: number;
+  coWatchCount?: number;
+  coRatingCount?: number;
+  averageBehaviorRating?: number | null;
+  evidenceSources?: string[];
   finalScore?: number;
   explanation?: string[];
 }
 
-function buildRecommendationPipeline(input: RecommendationPipelineInput): Document[] {
-  const candidateLimit = Math.max(input.limit * 8, 50);
+function buildRecommendationPipeline(
+  input: RecommendationPipelineInput,
+): Document[] {
+  const candidateLimit = Math.min(
+    Math.max(input.limit, 1),
+    env.VECTOR_NUM_CANDIDATES,
+  );
   const matchFilter = buildRecommendationMatchFilter(input);
   const genreDivisor = Math.max(Math.min(input.preferredGenres.length, 3), 1);
 
@@ -227,14 +306,325 @@ function buildRecommendationPipeline(input: RecommendationPipelineInput): Docume
     {
       $addFields: {
         ratingValue: {
-          $ifNull: ["$imdb.rating", { $ifNull: ["$tomatoes.viewer.rating", 0] }],
+          $ifNull: [
+            "$imdb.rating",
+            { $ifNull: ["$tomatoes.viewer.rating", 0] },
+          ],
         },
         votesValue: {
-          $ifNull: ["$imdb.votes", { $ifNull: ["$tomatoes.viewer.numReviews", 0] }],
+          $ifNull: [
+            "$imdb.votes",
+            { $ifNull: ["$tomatoes.viewer.numReviews", 0] },
+          ],
         },
         genreOverlapCount: {
           $size: {
-            $setIntersection: [{ $ifNull: ["$genres", []] }, input.preferredGenres],
+            $setIntersection: [
+              { $ifNull: ["$genres", []] },
+              input.preferredGenres,
+            ],
+          },
+        },
+      },
+    },
+    {
+      $lookup: {
+        from: env.INTERACTIONS_COLLECTION,
+        let: {
+          candidateMovieId: "$_id",
+        },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$movieId", "$$candidateMovieId"] },
+                  { $in: ["$userId", input.collaborativeUserIds] },
+                  { $in: ["$action", positiveInteractionActions] },
+                ],
+              },
+            },
+          },
+          {
+            $group: {
+              _id: "$movieId",
+              count: { $sum: 1 },
+              averageRating: { $avg: { $ifNull: ["$rating", 0] } },
+            },
+          },
+        ],
+        as: "collaborativeMatches",
+      },
+    },
+    {
+      $addFields: {
+        ratingScore: {
+          $divide: [{ $min: [{ $max: ["$ratingValue", 0] }, 10] }, 10],
+        },
+        popularityScore: {
+          $min: [
+            1,
+            {
+              $divide: [{ $log10: { $add: ["$votesValue", 1] } }, 6],
+            },
+          ],
+        },
+        genreOverlapScore: {
+          $divide: ["$genreOverlapCount", genreDivisor],
+        },
+        collaborativeCount: {
+          $ifNull: [{ $first: "$collaborativeMatches.count" }, 0],
+        },
+        similarViewerCount: {
+          $ifNull: [{ $first: "$collaborativeMatches.count" }, 0],
+        },
+      },
+    },
+    {
+      $addFields: {
+        collaborativeScore: {
+          $min: [
+            1,
+            {
+              $divide: [
+                "$collaborativeCount",
+                Math.max(input.collaborativeUserIds.length, 1),
+              ],
+            },
+          ],
+        },
+      },
+    },
+    {
+      $addFields: {
+        finalScore: {
+          $add: [
+            { $multiply: ["$vectorScore", scoringWeights.vector] },
+            { $multiply: ["$ratingScore", scoringWeights.rating] },
+            { $multiply: ["$genreOverlapScore", scoringWeights.genreOverlap] },
+            { $multiply: ["$popularityScore", scoringWeights.popularity] },
+            {
+              $multiply: ["$collaborativeScore", scoringWeights.collaborative],
+            },
+          ],
+        },
+        evidenceSources: ["vector_search", "aggregation_lookup"],
+      },
+    },
+    {
+      $sort: {
+        finalScore: -1,
+        vectorScore: -1,
+      },
+    },
+    {
+      $limit: input.limit,
+    },
+    {
+      $project: {
+        [env.MOVIE_EMBEDDING_FIELD]: 0,
+        collaborativeMatches: 0,
+      },
+    },
+  ];
+}
+
+interface BehavioralCandidatesInput {
+  favoriteMovieIds: ObjectId[];
+  excludedMovieIds: ObjectId[];
+  currentUserId?: ObjectId;
+  preferredGenres: string[];
+  limit: number;
+  filters: RecommendationPipelineInput["filters"];
+}
+
+async function findBehavioralCandidates(
+  input: BehavioralCandidatesInput,
+): Promise<Array<MovieDoc & ScoredMovie>> {
+  if (input.favoriteMovieIds.length === 0) {
+    return [];
+  }
+
+  const interactions = await interactionsCollection();
+  const genreDivisor = Math.max(Math.min(input.preferredGenres.length, 3), 1);
+  const matchFavoriteInteractions: Document = {
+    movieId: { $in: input.favoriteMovieIds },
+    action: { $in: positiveInteractionActions },
+  };
+
+  if (input.currentUserId) {
+    matchFavoriteInteractions.userId = { $ne: input.currentUserId };
+  }
+
+  const pipeline: Document[] = [
+    {
+      $match: matchFavoriteInteractions,
+    },
+    {
+      $group: {
+        _id: "$userId",
+        overlapCount: { $sum: 1 },
+        likedOverlap: {
+          $sum: { $cond: [{ $eq: ["$action", "liked"] }, 1, 0] },
+        },
+      },
+    },
+    {
+      $sort: {
+        overlapCount: -1,
+        likedOverlap: -1,
+      },
+    },
+    {
+      $limit: 50,
+    },
+    {
+      $lookup: {
+        from: env.INTERACTIONS_COLLECTION,
+        let: {
+          similarUserId: "$_id",
+        },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$userId", "$$similarUserId"] },
+                  { $in: ["$action", positiveInteractionActions] },
+                  { $not: [{ $in: ["$movieId", input.excludedMovieIds] }] },
+                ],
+              },
+            },
+          },
+          {
+            $project: {
+              movieId: 1,
+              action: 1,
+              rating: 1,
+            },
+          },
+        ],
+        as: "candidateInteractions",
+      },
+    },
+    {
+      $unwind: "$candidateInteractions",
+    },
+    {
+      $group: {
+        _id: "$candidateInteractions.movieId",
+        similarViewerIds: { $addToSet: "$_id" },
+        overlapStrength: { $sum: "$overlapCount" },
+        coLikeCount: {
+          $sum: {
+            $cond: [{ $eq: ["$candidateInteractions.action", "liked"] }, 1, 0],
+          },
+        },
+        coWatchCount: {
+          $sum: {
+            $cond: [
+              { $eq: ["$candidateInteractions.action", "watched"] },
+              1,
+              0,
+            ],
+          },
+        },
+        coRatingCount: {
+          $sum: {
+            $cond: [{ $eq: ["$candidateInteractions.action", "rated"] }, 1, 0],
+          },
+        },
+        averageBehaviorRating: { $avg: "$candidateInteractions.rating" },
+      },
+    },
+    {
+      $addFields: {
+        similarViewerCount: { $size: "$similarViewerIds" },
+      },
+    },
+    {
+      $addFields: {
+        collaborativeScore: {
+          $min: [
+            1,
+            {
+              $divide: [
+                {
+                  $add: [
+                    "$coLikeCount",
+                    { $multiply: ["$coRatingCount", 0.8] },
+                    { $multiply: ["$coWatchCount", 0.45] },
+                    { $multiply: ["$overlapStrength", 0.2] },
+                  ],
+                },
+                Math.max(input.favoriteMovieIds.length * 3, 1),
+              ],
+            },
+          ],
+        },
+      },
+    },
+    {
+      $lookup: {
+        from: env.MOVIES_COLLECTION,
+        localField: "_id",
+        foreignField: "_id",
+        as: "movie",
+      },
+    },
+    {
+      $unwind: "$movie",
+    },
+    {
+      $replaceRoot: {
+        newRoot: {
+          $mergeObjects: [
+            "$movie",
+            {
+              collaborativeCount: "$similarViewerCount",
+              collaborativeScore: "$collaborativeScore",
+              similarViewerCount: "$similarViewerCount",
+              coLikeCount: "$coLikeCount",
+              coWatchCount: "$coWatchCount",
+              coRatingCount: "$coRatingCount",
+              averageBehaviorRating: "$averageBehaviorRating",
+              evidenceSources: ["aggregation_collaborative_filtering"],
+            },
+          ],
+        },
+      },
+    },
+    {
+      $match: buildRecommendationMatchFilter({
+        queryVector: [],
+        excludedMovieIds: input.excludedMovieIds,
+        preferredGenres: input.preferredGenres,
+        collaborativeUserIds: [],
+        limit: input.limit,
+        filters: input.filters,
+      }),
+    },
+    {
+      $addFields: {
+        vectorScore: 0,
+        ratingValue: {
+          $ifNull: [
+            "$imdb.rating",
+            { $ifNull: ["$tomatoes.viewer.rating", 0] },
+          ],
+        },
+        votesValue: {
+          $ifNull: [
+            "$imdb.votes",
+            { $ifNull: ["$tomatoes.viewer.numReviews", 0] },
+          ],
+        },
+        genreOverlapCount: {
+          $size: {
+            $setIntersection: [
+              { $ifNull: ["$genres", []] },
+              input.preferredGenres,
+            ],
           },
         },
       },
@@ -261,10 +651,13 @@ function buildRecommendationPipeline(input: RecommendationPipelineInput): Docume
       $addFields: {
         finalScore: {
           $add: [
-            { $multiply: ["$vectorScore", 0.6] },
-            { $multiply: ["$ratingScore", 0.18] },
-            { $multiply: ["$genreOverlapScore", 0.14] },
-            { $multiply: ["$popularityScore", 0.08] },
+            { $multiply: ["$vectorScore", scoringWeights.vector] },
+            { $multiply: ["$ratingScore", scoringWeights.rating] },
+            { $multiply: ["$genreOverlapScore", scoringWeights.genreOverlap] },
+            { $multiply: ["$popularityScore", scoringWeights.popularity] },
+            {
+              $multiply: ["$collaborativeScore", scoringWeights.collaborative],
+            },
           ],
         },
       },
@@ -272,7 +665,8 @@ function buildRecommendationPipeline(input: RecommendationPipelineInput): Docume
     {
       $sort: {
         finalScore: -1,
-        vectorScore: -1,
+        collaborativeScore: -1,
+        similarViewerCount: -1,
       },
     },
     {
@@ -281,12 +675,107 @@ function buildRecommendationPipeline(input: RecommendationPipelineInput): Docume
     {
       $project: {
         [env.MOVIE_EMBEDDING_FIELD]: 0,
+        movie: 0,
+        similarViewerIds: 0,
       },
     },
   ];
+
+  return interactions.aggregate<MovieDoc & ScoredMovie>(pipeline).toArray();
 }
 
-function buildRecommendationMatchFilter(input: RecommendationPipelineInput): Filter<MovieDoc> {
+function mergeRecommendationCandidates(
+  vectorResults: Array<MovieDoc & ScoredMovie>,
+  behavioralResults: Array<MovieDoc & ScoredMovie>,
+  limit: number,
+): Array<MovieDoc & ScoredMovie> {
+  const merged = new Map<string, MovieDoc & ScoredMovie>();
+
+  for (const movie of [...vectorResults, ...behavioralResults]) {
+    const key = objectIdToString(movie._id);
+    const existing = merged.get(key);
+
+    if (!existing) {
+      merged.set(key, recomputeFinalScore(movie));
+      continue;
+    }
+
+    merged.set(
+      key,
+      recomputeFinalScore({
+        ...existing,
+        vectorScore: Math.max(
+          existing.vectorScore ?? 0,
+          movie.vectorScore ?? 0,
+        ),
+        ratingScore: Math.max(
+          existing.ratingScore ?? 0,
+          movie.ratingScore ?? 0,
+        ),
+        genreOverlapScore: Math.max(
+          existing.genreOverlapScore ?? 0,
+          movie.genreOverlapScore ?? 0,
+        ),
+        popularityScore: Math.max(
+          existing.popularityScore ?? 0,
+          movie.popularityScore ?? 0,
+        ),
+        collaborativeScore: Math.max(
+          existing.collaborativeScore ?? 0,
+          movie.collaborativeScore ?? 0,
+        ),
+        collaborativeCount: Math.max(
+          existing.collaborativeCount ?? 0,
+          movie.collaborativeCount ?? 0,
+        ),
+        similarViewerCount: Math.max(
+          existing.similarViewerCount ?? 0,
+          movie.similarViewerCount ?? 0,
+        ),
+        coLikeCount: Math.max(
+          existing.coLikeCount ?? 0,
+          movie.coLikeCount ?? 0,
+        ),
+        coWatchCount: Math.max(
+          existing.coWatchCount ?? 0,
+          movie.coWatchCount ?? 0,
+        ),
+        coRatingCount: Math.max(
+          existing.coRatingCount ?? 0,
+          movie.coRatingCount ?? 0,
+        ),
+        averageBehaviorRating:
+          movie.averageBehaviorRating ?? existing.averageBehaviorRating,
+        evidenceSources: [
+          ...new Set([
+            ...(existing.evidenceSources ?? []),
+            ...(movie.evidenceSources ?? []),
+          ]),
+        ],
+      }),
+    );
+  }
+
+  return [...merged.values()]
+    .sort((a, b) => (b.finalScore ?? 0) - (a.finalScore ?? 0))
+    .slice(0, limit);
+}
+
+function recomputeFinalScore<T extends ScoredMovie>(movie: T): T {
+  return {
+    ...movie,
+    finalScore:
+      (movie.vectorScore ?? 0) * scoringWeights.vector +
+      (movie.ratingScore ?? 0) * scoringWeights.rating +
+      (movie.genreOverlapScore ?? 0) * scoringWeights.genreOverlap +
+      (movie.popularityScore ?? 0) * scoringWeights.popularity +
+      (movie.collaborativeScore ?? 0) * scoringWeights.collaborative,
+  };
+}
+
+function buildRecommendationMatchFilter(
+  input: RecommendationPipelineInput,
+): Filter<MovieDoc> {
   const filter: Filter<MovieDoc> = {
     _id: { $nin: input.excludedMovieIds },
   };
@@ -314,7 +803,10 @@ function buildRecommendationMatchFilter(input: RecommendationPipelineInput): Fil
   return filter;
 }
 
-function buildPreferredGenres(movies: MovieDoc[], filterGenres?: string[]): string[] {
+function buildPreferredGenres(
+  movies: MovieDoc[],
+  filterGenres?: string[],
+): string[] {
   const counts = new Map<string, number>();
 
   for (const genre of filterGenres ?? []) {
@@ -345,11 +837,15 @@ function addRecommendationExplanation<T extends MovieDoc & ScoredMovie>(
   const votes = getMovieVotes(movie);
 
   if (movie.vectorScore && movie.vectorScore > 0) {
-    explanations.push("Similar story and semantic profile to your favorite movies");
+    explanations.push(
+      "Matches the semantic profile of your request or favorite movies",
+    );
   }
 
   if (matchingGenres.length > 0) {
-    explanations.push(`Matches preferred genres: ${matchingGenres.slice(0, 3).join(", ")}`);
+    explanations.push(
+      `Matches preferred genres: ${matchingGenres.slice(0, 3).join(", ")}`,
+    );
   }
 
   if (typeof rating === "number" && rating >= 7) {
@@ -360,6 +856,17 @@ function addRecommendationExplanation<T extends MovieDoc & ScoredMovie>(
     explanations.push("Popular movie with broad audience validation");
   }
 
+  const similarViewerCount =
+    typeof movie.similarViewerCount === "number"
+      ? movie.similarViewerCount
+      : movie.collaborativeCount;
+
+  if (typeof similarViewerCount === "number" && similarViewerCount > 0) {
+    explanations.push(
+      `Behavioral match from Aggregation Pipeline: ${similarViewerCount} similar viewer${similarViewerCount > 1 ? "s" : ""} liked, rated, or watched this`,
+    );
+  }
+
   if (explanations.length === 0) {
     explanations.push("Recommended by the blended scoring model");
   }
@@ -368,6 +875,31 @@ function addRecommendationExplanation<T extends MovieDoc & ScoredMovie>(
     ...movie,
     explanation: explanations,
   };
+}
+
+async function findCollaborativeUserIds(
+  favoriteMovieIds: ObjectId[],
+  currentUserId?: ObjectId,
+): Promise<ObjectId[]> {
+  if (favoriteMovieIds.length === 0) {
+    return [];
+  }
+
+  const interactions = await interactionsCollection();
+  const match: Record<string, unknown> = {
+    movieId: { $in: favoriteMovieIds },
+    action: { $in: positiveInteractionActions },
+  };
+
+  if (currentUserId) {
+    match.userId = { $ne: currentUserId };
+  }
+
+  const userIds = await interactions.distinct("userId", match);
+
+  return uniqueObjectIds(
+    userIds.filter((value): value is ObjectId => value instanceof ObjectId),
+  );
 }
 
 function uniqueObjectIds(values: ObjectId[]): ObjectId[] {

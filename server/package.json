@@ -7,7 +7,17 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "db:seed": "tsx src/scripts/seed-movies.ts",
+    "db:seed-demo-interactions": "tsx src/scripts/seed-demo-interactions.ts",
+    "db:create-vector-index": "tsx src/scripts/create-vector-index.ts",
+    "db:setup": "npm run db:seed && npm run embeddings:backfill && npm run db:create-vector-index && npm run db:seed-demo-interactions",
+    "embeddings:backfill": "tsx src/scripts/backfill-movie-embeddings.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -16,14 +26,20 @@
     "helmet": "^8.0.0",
     "mongodb": "^6.12.0",
     "morgan": "^1.10.0",
+    "openai": "^6.38.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/morgan": "^1.9.9",
     "@types/node": "^22.10.5",
+    "eslint": "^10.4.0",
+    "prettier": "^3.8.3",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.59.4",
+    "vitest": "^4.1.7"
   }
 }

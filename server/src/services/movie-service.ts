@@ -1,8 +1,10 @@
 import type { Filter, Sort } from "mongodb";
 import { z } from "zod";
 import { moviesCollection } from "../db/collections";
+import { ApiError } from "../middleware/error-handler";
 import type { MovieDoc } from "../models/domain";
 import { toMovieSummary } from "../utils/movie-mapper";
+import { parseObjectId } from "../utils/object-id";
 
 export const listMoviesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(24),
@@ -18,7 +20,8 @@ export const listMoviesQuerySchema = z.object({
 
 export const searchMoviesQuerySchema = z.object({
   q: z.string().trim().min(1),
-  limit: z.coerce.number().int().min(1).max(50).default(12),
+  limit: z.coerce.number().int().min(1).max(50).default(8),
+  skip: z.coerce.number().int().min(0).default(0),
 });
 
 export async function listMovies(rawQuery: unknown) {
@@ -64,18 +67,103 @@ export async function searchMovies(rawQuery: unknown) {
     ],
   };
 
-  const items = await collection
-    .find(filter, { projection: movieSummaryProjection() })
-    .sort({ "imdb.rating": -1, "imdb.votes": -1, year: -1 })
-    .limit(query.limit)
-    .toArray();
+  const [items, total] = await Promise.all([
+    collection
+      .find(filter, { projection: movieSummaryProjection() })
+      .sort({ "imdb.rating": -1, "imdb.votes": -1, year: -1 })
+      .skip(query.skip)
+      .limit(query.limit)
+      .toArray(),
+    collection.countDocuments(filter),
+  ]);
 
   return {
     items: items.map(toMovieSummary),
+    pagination: {
+      total,
+      limit: query.limit,
+      skip: query.skip,
+      hasMore: query.skip + items.length < total,
+    },
   };
 }
 
-function buildMovieFilter(query: z.infer<typeof listMoviesQuerySchema>): Filter<MovieDoc> {
+export async function getMovieById(movieIdValue: string) {
+  const movieId = parseObjectId(movieIdValue, "movieId");
+  const collection = await moviesCollection();
+  const movie = await collection.findOne(
+    { _id: movieId },
+    { projection: movieSummaryProjection() },
+  );
+
+  if (!movie) {
+    throw new ApiError(404, "Movie not found");
+  }
+
+  return {
+    movie: toMovieSummary(movie),
+  };
+}
+
+export async function getMovieMeta() {
+  const collection = await moviesCollection();
+  const [genreRows, yearBounds, ratingBounds, total] = await Promise.all([
+    collection
+      .aggregate<{
+        _id: string;
+        count: number;
+      }>([
+        { $unwind: "$genres" },
+        { $group: { _id: "$genres", count: { $sum: 1 } } },
+        { $sort: { count: -1, _id: 1 } },
+      ])
+      .toArray(),
+    collection
+      .aggregate<{ minYear: number; maxYear: number }>([
+        {
+          $group: {
+            _id: null,
+            minYear: { $min: "$year" },
+            maxYear: { $max: "$year" },
+          },
+        },
+      ])
+      .next(),
+    collection
+      .aggregate<{ minRating: number; maxRating: number }>([
+        {
+          $group: {
+            _id: null,
+            minRating: { $min: "$imdb.rating" },
+            maxRating: { $max: "$imdb.rating" },
+          },
+        },
+      ])
+      .next(),
+    collection.countDocuments(),
+  ]);
+
+  return {
+    totalMovies: total,
+    genres: genreRows.map((row) => ({
+      name: row._id,
+      count: row.count,
+    })),
+    years: {
+      min: yearBounds?.minYear ?? null,
+      max: yearBounds?.maxYear ?? null,
+    },
+    ratings: {
+      min: ratingBounds?.minRating ?? null,
+      max: ratingBounds?.maxRating ?? null,
+    },
+    sorts: ["rating_desc", "votes_desc", "year_desc", "title"],
+  };
+}
+
+function buildMovieFilter(
+  query: z.infer<typeof listMoviesQuerySchema>,
+): Filter<MovieDoc> {
   const filter: Filter<MovieDoc> = {};
 
   if (query.genre) {
