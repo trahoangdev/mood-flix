@@ -475,15 +475,16 @@ export function MoodflixDashboard() {
 
           </div>
 
-          <div className="space-y-6">
+          <div>
             <SystemCard readiness={readiness} demoUser={demoUser} />
-            <RecommendationPanel
-              recommendation={recommendation}
-              history={history}
-              loading={recommending}
-            />
           </div>
         </div>
+
+        <RecommendationPanel
+          recommendation={recommendation}
+          history={history}
+          loading={recommending}
+        />
 
         <Card className="mt-6">
           <CardHeader>
@@ -747,27 +748,39 @@ function RecommendationPanel({
   loading: boolean
 }) {
   return (
-    <Card>
+    <Card className="mt-6">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Clapperboard className="size-5" />
-          Recommendations
-        </CardTitle>
-        <CardDescription>
-          Ranked by vector similarity, scoring signals, and collaborative behavior.
-        </CardDescription>
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Clapperboard className="size-5" />
+              Recommendations
+            </CardTitle>
+            <CardDescription>
+              Ranked by vector similarity, scoring signals, and collaborative behavior.
+            </CardDescription>
+          </div>
+          {recommendation ? (
+            <Badge variant="secondary">
+              {recommendation.recommendations.length} ranked matches
+            </Badge>
+          ) : null}
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {loading ? (
-          <div className="space-y-3">
-            {Array.from({ length: 3 }).map((_, index) => (
-              <Skeleton key={index} className="h-32 rounded-lg" />
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <Skeleton key={index} className="h-44 rounded-[28px]" />
             ))}
           </div>
         ) : recommendation ? (
           <>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <Signal label="Similar viewers" value={recommendation.input.collaborativeUserCount} />
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Signal
+                label="Similar viewers"
+                value={recommendation.input.collaborativeUserCount}
+              />
               <Signal
                 label="Behavior candidates"
                 value={recommendation.candidateSources.behavioralCandidates}
@@ -781,7 +794,7 @@ function RecommendationPanel({
             <Separator />
             <PipelineExplanation recommendation={recommendation} />
             <Separator />
-            <div className="space-y-3">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {recommendation.recommendations.map((movie, index) => (
                 <RecommendationCard key={movie.id} movie={movie} rank={index + 1} />
               ))}
@@ -789,7 +802,7 @@ function RecommendationPanel({
             <HistoryList history={history} />
           </>
         ) : (
-          <div className="text-muted-foreground flex min-h-56 flex-col items-center justify-center gap-3 rounded-lg border border-dashed p-6 text-center text-sm">
+          <div className="text-muted-foreground flex min-h-36 flex-col items-center justify-center gap-3 rounded-[28px] border border-dashed p-6 text-center text-sm">
             <Sparkles className="size-8" />
             <p>Generate recommendations to see ranked movie matches here.</p>
           </div>
@@ -820,7 +833,7 @@ function PipelineExplanation({
         <Route className="size-4" />
         How the engine ranked this
       </div>
-      <div className="grid gap-2">
+      <div className="grid gap-3 lg:grid-cols-3">
         <PipelineStep
           icon={Sparkles}
           label="Semantic search"
@@ -864,13 +877,18 @@ function PipelineStep({
   body: string
 }) {
   return (
-    <div className="rounded-lg border p-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm font-medium">
+    <div className="min-w-0 rounded-[24px] border p-3">
+      <div className="flex min-w-0 flex-col items-start gap-2">
+        <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
           <Icon className="text-primary size-4" />
-          {label}
+          <span className="min-w-0">{label}</span>
         </div>
-        <Badge variant="secondary">{value}</Badge>
+        <Badge
+          variant="secondary"
+          className="max-w-full whitespace-normal break-words text-left leading-tight"
+        >
+          {value}
+        </Badge>
       </div>
       <p className="text-muted-foreground mt-2 text-xs">{body}</p>
     </div>
@@ -890,9 +908,9 @@ function HistoryList({ history }: { history: RecommendationHistory["items"] }) {
           <Clock3 className="size-4" />
           Recent runs
         </div>
-        <div className="space-y-2">
+        <div className="grid gap-2 md:grid-cols-3">
           {history.slice(0, 3).map((item) => (
-            <div key={item.id} className="rounded-lg border p-3 text-xs">
+            <div key={item.id} className="rounded-[20px] border p-3 text-xs">
               <div className="text-muted-foreground">
                 {new Date(item.createdAt).toLocaleString()}
               </div>
@@ -912,18 +930,16 @@ function HistoryList({ history }: { history: RecommendationHistory["items"] }) {
 
 function RecommendationCard({ movie, rank }: { movie: Recommendation; rank: number }) {
   return (
-    <div className="rounded-lg border p-3">
-      <div className="flex gap-3">
-        <Poster movie={movie} className="h-24 w-16" />
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <Badge>{rank}</Badge>
-                <h3 className="truncate text-sm font-medium">{movie.title}</h3>
-              </div>
+    <article className="flex min-w-0 flex-col gap-3 rounded-[28px] border-2 p-3">
+      <div className="grid min-w-0 grid-cols-[76px_minmax(0,1fr)] gap-3">
+        <Poster movie={movie} className="h-28 w-[76px]" />
+        <div className="flex min-w-0 flex-col gap-2">
+          <div className="flex min-w-0 items-start justify-between gap-2">
+            <div className="min-w-0 space-y-1">
+              <Badge>#{rank}</Badge>
+              <h3 className="truncate text-base font-semibold leading-tight">{movie.title}</h3>
               <p className="text-muted-foreground text-xs">
-                Final score {(movie.score.final * 100).toFixed(1)}
+                Score {(movie.score.final * 100).toFixed(1)}
               </p>
             </div>
             <Badge variant="outline">
@@ -932,36 +948,39 @@ function RecommendationCard({ movie, rank }: { movie: Recommendation; rank: numb
             </Badge>
           </div>
 
-          <div className="grid grid-cols-2 gap-1 text-xs">
-            <Score label="Vector" value={movie.score.vector} />
-            <Score label="Behavior" value={movie.score.collaborative} />
-            <Score label="Genre" value={movie.score.genreOverlap} />
-            <Score label="Rating" value={movie.score.rating} />
-          </div>
-
-          {movie.evidence.similarViewerCount > 0 ? (
-            <div className="text-muted-foreground flex flex-wrap gap-1 text-xs">
-              <Badge variant="secondary">
-                {movie.evidence.similarViewerCount} similar viewers
-              </Badge>
-              <Badge variant="outline">{movie.evidence.likedBySimilar} likes</Badge>
-              <Badge variant="outline">{movie.evidence.watchedBySimilar} watched</Badge>
-              {movie.evidence.ratedBySimilar > 0 ? (
-                <Badge variant="outline">{movie.evidence.ratedBySimilar} ratings</Badge>
-              ) : null}
-            </div>
-          ) : null}
+          <p className="text-muted-foreground line-clamp-2 text-xs leading-relaxed">
+            {movie.plot}
+          </p>
         </div>
       </div>
-      <ul className="text-muted-foreground mt-3 space-y-1 text-xs">
-        {movie.explanation.map((item) => (
+
+      <div className="grid grid-cols-2 gap-1.5 text-xs">
+        <Score label="Vector" value={movie.score.vector} />
+        <Score label="Behavior" value={movie.score.collaborative} />
+        <Score label="Genre" value={movie.score.genreOverlap} />
+        <Score label="Rating" value={movie.score.rating} />
+      </div>
+
+      {movie.evidence.similarViewerCount > 0 ? (
+        <div className="text-muted-foreground flex min-h-8 flex-wrap gap-1 text-xs">
+          <Badge variant="secondary">{movie.evidence.similarViewerCount} viewers</Badge>
+          <Badge variant="outline">{movie.evidence.likedBySimilar} likes</Badge>
+          <Badge variant="outline">{movie.evidence.watchedBySimilar} watched</Badge>
+          {movie.evidence.ratedBySimilar > 0 ? (
+            <Badge variant="outline">{movie.evidence.ratedBySimilar} ratings</Badge>
+          ) : null}
+        </div>
+      ) : null}
+
+      <ul className="text-muted-foreground mt-auto space-y-1 text-xs">
+        {movie.explanation.slice(0, 2).map((item) => (
           <li key={item} className="flex gap-2">
             <ThumbsUp className="mt-0.5 size-3 shrink-0" />
             <span>{item}</span>
           </li>
         ))}
       </ul>
-    </div>
+    </article>
   )
 }
 
