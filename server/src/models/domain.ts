@@ -31,6 +31,7 @@ export interface UserDoc {
   name: string;
   likedMovieIds: ObjectId[];
   watchedMovieIds: ObjectId[];
+  isSeedUser?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -47,6 +48,7 @@ export interface InteractionDoc {
 export interface RecommendationLogDoc {
   _id: ObjectId;
   userId?: ObjectId;
+  preferenceText?: string;
   favoriteMovieIds: ObjectId[];
   recommendedMovieIds: ObjectId[];
   filters?: Record<string, unknown>;
@@ -74,6 +76,7 @@ export interface RecommendedMovie extends MovieSummary {
     rating: number;
     genreOverlap: number;
     popularity: number;
+    collaborative: number;
   };
   explanation: string[];
 }

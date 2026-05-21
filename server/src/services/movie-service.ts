@@ -1,8 +1,10 @@
 import type { Filter, Sort } from "mongodb";
 import { z } from "zod";
 import { moviesCollection } from "../db/collections";
+import { ApiError } from "../middleware/error-handler";
 import type { MovieDoc } from "../models/domain";
 import { toMovieSummary } from "../utils/movie-mapper";
+import { parseObjectId } from "../utils/object-id";
 
 export const listMoviesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(24),
@@ -72,6 +74,76 @@ export async function searchMovies(rawQuery: unknown) {
 
   return {
     items: items.map(toMovieSummary),
+  };
+}
+
+export async function getMovieById(movieIdValue: string) {
+  const movieId = parseObjectId(movieIdValue, "movieId");
+  const collection = await moviesCollection();
+  const movie = await collection.findOne(
+    { _id: movieId },
+    { projection: movieSummaryProjection() },
+  );
+
+  if (!movie) {
+    throw new ApiError(404, "Movie not found");
+  }
+
+  return {
+    movie: toMovieSummary(movie),
+  };
+}
+
+export async function getMovieMeta() {
+  const collection = await moviesCollection();
+  const [genreRows, yearBounds, ratingBounds, total] = await Promise.all([
+    collection
+      .aggregate<{ _id: string; count: number }>([
+        { $unwind: "$genres" },
+        { $group: { _id: "$genres", count: { $sum: 1 } } },
+        { $sort: { count: -1, _id: 1 } },
+      ])
+      .toArray(),
+    collection
+      .aggregate<{ minYear: number; maxYear: number }>([
+        {
+          $group: {
+            _id: null,
+            minYear: { $min: "$year" },
+            maxYear: { $max: "$year" },
+          },
+        },
+      ])
+      .next(),
+    collection
+      .aggregate<{ minRating: number; maxRating: number }>([
+        {
+          $group: {
+            _id: null,
+            minRating: { $min: "$imdb.rating" },
+            maxRating: { $max: "$imdb.rating" },
+          },
+        },
+      ])
+      .next(),
+    collection.countDocuments(),
+  ]);
+
+  return {
+    totalMovies: total,
+    genres: genreRows.map((row) => ({
+      name: row._id,
+      count: row.count,
+    })),
+    years: {
+      min: yearBounds?.minYear ?? null,
+      max: yearBounds?.maxYear ?? null,
+    },
+    ratings: {
+      min: ratingBounds?.minRating ?? null,
+      max: ratingBounds?.maxRating ?? null,
+    },
+    sorts: ["rating_desc", "votes_desc", "year_desc", "title"],
   };
 }
 

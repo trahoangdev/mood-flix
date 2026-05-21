@@ -1,6 +1,11 @@
 import { ObjectId } from "mongodb";
 import { z } from "zod";
-import { interactionsCollection, usersCollection } from "../db/collections";
+import {
+  interactionsCollection,
+  moviesCollection,
+  usersCollection,
+} from "../db/collections";
+import { ApiError } from "../middleware/error-handler";
 import type { InteractionAction } from "../models/domain";
 import { objectIdToString, parseObjectId } from "../utils/object-id";
 
@@ -50,6 +55,20 @@ export async function createInteraction(rawBody: unknown) {
 
   const users = await usersCollection();
   const interactions = await interactionsCollection();
+  const movies = await moviesCollection();
+
+  const [user, movie] = await Promise.all([
+    users.findOne({ _id: userId }, { projection: { _id: 1 } }),
+    movies.findOne({ _id: movieId }, { projection: { _id: 1 } }),
+  ]);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  if (!movie) {
+    throw new ApiError(404, "Movie not found");
+  }
 
   await interactions.insertOne({
     _id: new ObjectId(),

@@ -17,6 +17,20 @@ const envSchema = z.object({
   MOVIE_EMBEDDING_FIELD: z.string().min(1).default("embedding"),
   VECTOR_INDEX_NAME: z.string().min(1).default("movie_vector_index"),
 
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_EMBEDDING_MODEL: z.string().min(1).default("text-embedding-3-small"),
+  OPENAI_EMBEDDING_DIMENSIONS: z.preprocess(
+    (value) => {
+      if (value === "" || value === undefined || value === null) {
+        return undefined;
+      }
+
+      return value;
+    },
+    z.coerce.number().int().positive().optional(),
+  ),
+  EMBEDDING_BATCH_SIZE: z.coerce.number().int().min(1).max(2048).default(50),
+
   USERS_COLLECTION: z.string().min(1).default("users"),
   INTERACTIONS_COLLECTION: z.string().min(1).default("interactions"),
   RECOMMENDATION_LOGS_COLLECTION: z

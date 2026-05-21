@@ -1,75 +1,43 @@
-"use client"
+import { Clapperboard } from "lucide-react"
+import Link from "next/link"
 
-import * as React from "react"
 import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
-import { SidebarTrigger } from "@/components/ui/sidebar"
-import { CommandSearch, SearchTrigger } from "@/components/command-search"
 import { ModeToggle } from "@/components/mode-toggle"
 
 export function SiteHeader() {
-  const [searchOpen, setSearchOpen] = React.useState(false)
-
-  React.useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault()
-        setSearchOpen((open) => !open)
-      }
-    }
-
-    document.addEventListener("keydown", down)
-    return () => document.removeEventListener("keydown", down)
-  }, [])
-
   return (
-    <>
-      <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
-        <div className="flex w-full items-center gap-1 px-4 py-3 lg:gap-2 lg:px-6">
-          <SidebarTrigger className="-ml-1" />
-          <Separator
-            orientation="vertical"
-            className="mx-2 data-[orientation=vertical]:h-4"
-          />
-          <div className="flex-1 max-w-sm">
-            <SearchTrigger onClick={() => setSearchOpen(true)} />
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <Button variant="ghost" asChild size="sm" className="hidden sm:flex">
-              <a
-                href="https://shadcnstore.com/blocks"
-                rel="noopener noreferrer"
-                target="_blank"
-                className="dark:text-foreground"
-              >
-                Blocks
-              </a>
-            </Button>
-            <Button variant="ghost" asChild size="sm" className="hidden sm:flex">
-              <a
-                href="/landing"
-                rel="noopener noreferrer"
-                target="_blank"
-                className="dark:text-foreground"
-              >
-                Landing Page
-              </a>
-            </Button>
-            <Button variant="ghost" asChild size="sm" className="hidden sm:flex">
-              <a
-                href="https://github.com/silicondeck/shadcn-dashboard-landing-template"
-                rel="noopener noreferrer"
-                target="_blank"
-                className="dark:text-foreground"
-              >
-                GitHub
-              </a>
-            </Button>
-            <ModeToggle />
-          </div>
+    <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
+      <div className="flex h-14 items-center gap-3 px-4 lg:px-6">
+        <Link href="/dashboard" className="flex min-w-0 items-center gap-2 font-semibold">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+            <Clapperboard className="size-4" />
+          </span>
+          <span className="truncate">MoodFlix</span>
+        </Link>
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="ghost" asChild size="sm" className="hidden sm:flex">
+            <a
+              href="http://localhost:4000/api/system/readiness"
+              rel="noopener noreferrer"
+              target="_blank"
+              className="dark:text-foreground"
+            >
+              API Status
+            </a>
+          </Button>
+          <Button variant="ghost" asChild size="sm" className="hidden sm:flex">
+            <a
+              href="https://mini-hackathon-2026.mugvn.com/"
+              rel="noopener noreferrer"
+              target="_blank"
+              className="dark:text-foreground"
+            >
+              Hackathon
+            </a>
+          </Button>
+          <ModeToggle />
         </div>
-      </header>
-      <CommandSearch open={searchOpen} onOpenChange={setSearchOpen} />
-    </>
+      </div>
+    </header>
   )
 }

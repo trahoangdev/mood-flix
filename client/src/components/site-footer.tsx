@@ -11,16 +11,14 @@ export function SiteFooter() {
             <Heart className="h-4 w-4 fill-red-500 text-red-500" />
             <span>by</span>
             <Link
-              href="https://shadcnstore.com"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="/dashboard"
               className="font-medium text-foreground hover:text-primary transition-colors"
             >
-              ShadcnStore Team
+              MoodFlix
             </Link>
           </div>
           <p className="text-xs text-muted-foreground">
-            Building beautiful, accessible blocks, templates and dashboards for modern web applications.
+            MUGVN x MongoDB Mini Hackathon 2026 recommendation engine demo.
           </p>
         </div>
       </div>

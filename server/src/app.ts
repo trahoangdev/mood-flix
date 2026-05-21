@@ -4,6 +4,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import { getCorsOrigin } from "./config/env";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler";
+import { embeddingRoutes } from "./routes/embedding-routes";
 import { healthRoutes } from "./routes/health-routes";
 import { movieRoutes } from "./routes/movie-routes";
 import { recommendationRoutes } from "./routes/recommendation-routes";
@@ -22,6 +23,7 @@ export function createApp() {
   app.use(morgan("dev"));
 
   app.use(healthRoutes);
+  app.use(embeddingRoutes);
   app.use(movieRoutes);
   app.use(userRoutes);
   app.use(recommendationRoutes);

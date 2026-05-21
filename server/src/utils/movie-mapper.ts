@@ -80,6 +80,7 @@ export function toRecommendedMovie(
     ratingScore?: number;
     genreOverlapScore?: number;
     popularityScore?: number;
+    collaborativeScore?: number;
     finalScore?: number;
     explanation?: string[];
   },
@@ -92,6 +93,7 @@ export function toRecommendedMovie(
       rating: roundScore(movie.ratingScore),
       genreOverlap: roundScore(movie.genreOverlapScore),
       popularity: roundScore(movie.popularityScore),
+      collaborative: roundScore(movie.collaborativeScore),
     },
     explanation: Array.isArray(movie.explanation) ? movie.explanation : [],
   };
