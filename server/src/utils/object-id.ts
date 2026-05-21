@@ -9,7 +9,10 @@ export function parseObjectId(value: string, fieldName = "id"): ObjectId {
   return new ObjectId(value);
 }
 
-export function parseObjectIds(values: string[], fieldName: string): ObjectId[] {
+export function parseObjectIds(
+  values: string[],
+  fieldName: string,
+): ObjectId[] {
   return values.map((value) => parseObjectId(value, fieldName));
 }
 

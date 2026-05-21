@@ -19,16 +19,13 @@ const envSchema = z.object({
 
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_EMBEDDING_MODEL: z.string().min(1).default("text-embedding-3-small"),
-  OPENAI_EMBEDDING_DIMENSIONS: z.preprocess(
-    (value) => {
-      if (value === "" || value === undefined || value === null) {
-        return undefined;
-      }
+  OPENAI_EMBEDDING_DIMENSIONS: z.preprocess((value) => {
+    if (value === "" || value === undefined || value === null) {
+      return undefined;
+    }
 
-      return value;
-    },
-    z.coerce.number().int().positive().optional(),
-  ),
+    return value;
+  }, z.coerce.number().int().positive().optional()),
   EMBEDDING_BATCH_SIZE: z.coerce.number().int().min(1).max(2048).default(50),
 
   USERS_COLLECTION: z.string().min(1).default("users"),
@@ -38,8 +35,18 @@ const envSchema = z.object({
     .min(1)
     .default("recommendation_logs"),
 
-  DEFAULT_RECOMMENDATION_LIMIT: z.coerce.number().int().min(1).max(50).default(10),
-  VECTOR_NUM_CANDIDATES: z.coerce.number().int().min(10).max(10000).default(150),
+  DEFAULT_RECOMMENDATION_LIMIT: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(50)
+    .default(10),
+  VECTOR_NUM_CANDIDATES: z.coerce
+    .number()
+    .int()
+    .min(10)
+    .max(10000)
+    .default(150),
 });
 
 export const env = envSchema.parse(process.env);

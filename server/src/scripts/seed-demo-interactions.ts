@@ -1,5 +1,9 @@
 import { ObjectId } from "mongodb";
-import { interactionsCollection, moviesCollection, usersCollection } from "../db/collections";
+import {
+  interactionsCollection,
+  moviesCollection,
+  usersCollection,
+} from "../db/collections";
 import { closeMongoConnection } from "../db/mongo";
 import type { InteractionAction } from "../models/domain";
 
@@ -13,7 +17,12 @@ interface DemoProfile {
 const demoProfiles: DemoProfile[] = [
   {
     name: "Seed Viewer: Emotional Sci-Fi",
-    likes: ["arrival-2016", "her-2013", "eternal-sunshine-2004", "interstellar-2014"],
+    likes: [
+      "arrival-2016",
+      "her-2013",
+      "eternal-sunshine-2004",
+      "interstellar-2014",
+    ],
     watched: ["blade-runner-2049-2017", "ex-machina-2014"],
   },
   {
@@ -57,7 +66,19 @@ async function main() {
   const users = await usersCollection();
   const interactions = await interactionsCollection();
   const movieDocs = await movies
-    .find({ slug: { $in: [...new Set(demoProfiles.flatMap((profile) => [...profile.likes, ...profile.watched, ...(profile.skipped ?? [])]))] } })
+    .find({
+      slug: {
+        $in: [
+          ...new Set(
+            demoProfiles.flatMap((profile) => [
+              ...profile.likes,
+              ...profile.watched,
+              ...(profile.skipped ?? []),
+            ]),
+          ),
+        ],
+      },
+    })
     .project<{ _id: ObjectId; slug: string }>({ _id: 1, slug: 1 })
     .toArray();
   const movieBySlug = new Map(movieDocs.map((movie) => [movie.slug, movie]));

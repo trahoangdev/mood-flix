@@ -90,6 +90,14 @@ export interface Recommendation {
     popularity: number
     collaborative: number
   }
+  evidence: {
+    similarViewerCount: number
+    likedBySimilar: number
+    watchedBySimilar: number
+    ratedBySimilar: number
+    averageBehaviorRating: number | null
+    sources: string[]
+  }
   explanation: string[]
 }
 
@@ -112,7 +120,28 @@ export interface RecommendationResponse {
     popularity: number
     collaborative: number
   }
+  candidateSources: {
+    vectorCandidates: number
+    behavioralCandidates: number
+  }
   recommendations: Recommendation[]
+}
+
+export interface RecommendationHistory {
+  items: Array<{
+    id: string
+    userId: string
+    favoriteMovies: Array<{
+      id: string
+      title: string
+    }>
+    recommendedMovies: Array<{
+      id: string
+      title: string
+    }>
+    filters: Record<string, unknown>
+    createdAt: string
+  }>
 }
 
 export interface DemoUser {

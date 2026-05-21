@@ -1,5 +1,9 @@
 import { env } from "../config/env";
-import type { MovieDoc, MovieSummary, RecommendedMovie } from "../models/domain";
+import type {
+  MovieDoc,
+  MovieSummary,
+  RecommendedMovie,
+} from "../models/domain";
 import { objectIdToString } from "./object-id";
 
 function getByPath(source: Record<string, unknown>, path: string): unknown {
@@ -81,6 +85,12 @@ export function toRecommendedMovie(
     genreOverlapScore?: number;
     popularityScore?: number;
     collaborativeScore?: number;
+    similarViewerCount?: number;
+    coLikeCount?: number;
+    coWatchCount?: number;
+    coRatingCount?: number;
+    averageBehaviorRating?: number | null;
+    evidenceSources?: unknown[];
     finalScore?: number;
     explanation?: string[];
   },
@@ -95,6 +105,21 @@ export function toRecommendedMovie(
       popularity: roundScore(movie.popularityScore),
       collaborative: roundScore(movie.collaborativeScore),
     },
+    evidence: {
+      similarViewerCount: getNumericScore(movie.similarViewerCount),
+      likedBySimilar: getNumericScore(movie.coLikeCount),
+      watchedBySimilar: getNumericScore(movie.coWatchCount),
+      ratedBySimilar: getNumericScore(movie.coRatingCount),
+      averageBehaviorRating:
+        typeof movie.averageBehaviorRating === "number"
+          ? roundScore(movie.averageBehaviorRating)
+          : null,
+      sources: Array.isArray(movie.evidenceSources)
+        ? movie.evidenceSources.filter(
+            (source): source is string => typeof source === "string",
+          )
+        : [],
+    },
     explanation: Array.isArray(movie.explanation) ? movie.explanation : [],
   };
 }
@@ -105,4 +130,8 @@ function roundScore(value: number | null | undefined): number {
   }
 
   return Math.round(value * 1000) / 1000;
+}
+
+function getNumericScore(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }

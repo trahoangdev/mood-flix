@@ -78,5 +78,13 @@ export interface RecommendedMovie extends MovieSummary {
     popularity: number;
     collaborative: number;
   };
+  evidence: {
+    similarViewerCount: number;
+    likedBySimilar: number;
+    watchedBySimilar: number;
+    ratedBySimilar: number;
+    averageBehaviorRating: number | null;
+    sources: string[];
+  };
   explanation: string[];
 }

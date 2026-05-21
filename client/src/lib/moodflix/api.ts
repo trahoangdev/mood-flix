@@ -3,6 +3,7 @@ import type {
   Movie,
   MovieMeta,
   Readiness,
+  RecommendationHistory,
   RecommendationResponse,
 } from "./types"
 
@@ -102,4 +103,10 @@ export async function recommendMovies(input: {
     method: "POST",
     body: JSON.stringify(input),
   })
+}
+
+export async function getRecommendationHistory(userId: string) {
+  return request<RecommendationHistory>(
+    `/api/recommendations/${encodeURIComponent(userId)}/history`,
+  )
 }

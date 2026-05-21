@@ -6,17 +6,22 @@ import {
   Brain,
   Check,
   Clapperboard,
+  Clock3,
   Database,
+  Eye,
   Film,
+  GitMerge,
   Heart,
   Loader2,
   Play,
+  Route,
   Search,
   Server,
   Sparkles,
   Star,
   ThumbsUp,
   Users,
+  XCircle,
 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -45,6 +50,7 @@ import {
   createDemoUser,
   createInteraction,
   getMovieMeta,
+  getRecommendationHistory,
   getReadiness,
   listMovies,
   recommendMovies,
@@ -56,11 +62,24 @@ import type {
   MovieMeta,
   Readiness,
   Recommendation,
+  RecommendationHistory,
   RecommendationResponse,
 } from "@/lib/moodflix/types"
 
 const DEFAULT_PROMPT =
   "I want an emotional science fiction movie about memory, family, and human connection."
+
+function parseOptionalYear(value: string): number | undefined {
+  const trimmed = value.trim()
+
+  if (!trimmed) {
+    return undefined
+  }
+
+  const year = Number(trimmed)
+
+  return Number.isInteger(year) ? year : undefined
+}
 
 export function MoodflixDashboard() {
   const [readiness, setReadiness] = React.useState<Readiness | null>(null)
@@ -71,9 +90,13 @@ export function MoodflixDashboard() {
   const [preferenceText, setPreferenceText] = React.useState(DEFAULT_PROMPT)
   const [genre, setGenre] = React.useState("all")
   const [minRating, setMinRating] = React.useState("7")
+  const [yearFrom, setYearFrom] = React.useState("")
+  const [yearTo, setYearTo] = React.useState("")
   const [demoUser, setDemoUser] = React.useState<DemoUser | null>(null)
   const [recommendation, setRecommendation] =
     React.useState<RecommendationResponse | null>(null)
+  const [history, setHistory] = React.useState<RecommendationHistory["items"]>([])
+  const [movieActionStatus, setMovieActionStatus] = React.useState<Record<string, string>>({})
   const [loading, setLoading] = React.useState(true)
   const [searching, setSearching] = React.useState(false)
   const [recommending, setRecommending] = React.useState(false)
@@ -160,17 +183,42 @@ export function MoodflixDashboard() {
     return response.user
   }
 
-  async function handleLikeMovie(movie: Movie) {
+  async function refreshHistory(userId: string) {
+    const response = await getRecommendationHistory(userId)
+    setHistory(response.items)
+  }
+
+  async function handleMovieAction(
+    movie: Movie,
+    action: "liked" | "watched" | "skipped" | "rated",
+    rating?: number,
+  ) {
     try {
       setError(null)
       const user = await ensureDemoUser()
       await createInteraction({
         userId: user.id,
         movieId: movie.id,
-        action: "liked",
-        rating: 9,
+        action,
+        rating,
       })
-      toggleSelectedMovie(movie)
+      if (action === "liked" || action === "rated") {
+        setSelectedMovies((current) => {
+          const exists = current.some((item) => item.id === movie.id)
+          return exists ? current : [...current, movie].slice(0, 5)
+        })
+      }
+      setMovieActionStatus((current) => ({
+        ...current,
+        [movie.id]:
+          action === "liked"
+            ? "Liked signal saved"
+            : action === "watched"
+              ? "Watched signal saved"
+              : action === "rated"
+                ? "9/10 rating saved"
+                : "Skipped signal saved",
+      }))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to record interaction")
     }
@@ -195,9 +243,12 @@ export function MoodflixDashboard() {
         filters: {
           genres: genre === "all" ? undefined : [genre],
           minRating: minRating === "all" ? undefined : Number(minRating),
+          yearFrom: parseOptionalYear(yearFrom),
+          yearTo: parseOptionalYear(yearTo),
         },
       })
       setRecommendation(response)
+      await refreshHistory(user.id)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Recommendation failed")
     } finally {
@@ -300,6 +351,28 @@ export function MoodflixDashboard() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="year-from">Year from</Label>
+                    <Input
+                      id="year-from"
+                      inputMode="numeric"
+                      value={yearFrom}
+                      onChange={(event) => setYearFrom(event.target.value)}
+                      placeholder={meta?.years.min ? String(meta.years.min) : "Any"}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="year-to">Year to</Label>
+                    <Input
+                      id="year-to"
+                      inputMode="numeric"
+                      value={yearTo}
+                      onChange={(event) => setYearTo(event.target.value)}
+                      placeholder={meta?.years.max ? String(meta.years.max) : "Any"}
+                    />
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-3 rounded-lg border p-3">
@@ -393,8 +466,11 @@ export function MoodflixDashboard() {
                         key={movie.id}
                         movie={movie}
                         selected={selectedMovies.some((item) => item.id === movie.id)}
+                        actionStatus={movieActionStatus[movie.id]}
                         onToggle={() => toggleSelectedMovie(movie)}
-                        onLike={() => void handleLikeMovie(movie)}
+                        onAction={(action, rating) =>
+                          void handleMovieAction(movie, action, rating)
+                        }
                       />
                     ))}
                   </div>
@@ -405,7 +481,11 @@ export function MoodflixDashboard() {
 
           <div className="space-y-4">
             <SystemCard readiness={readiness} demoUser={demoUser} />
-            <RecommendationPanel recommendation={recommendation} loading={recommending} />
+            <RecommendationPanel
+              recommendation={recommendation}
+              history={history}
+              loading={recommending}
+            />
           </div>
         </div>
       </div>
@@ -434,13 +514,18 @@ function MetricBadge({
 function MovieCard({
   movie,
   selected,
+  actionStatus,
   onToggle,
-  onLike,
+  onAction,
 }: {
   movie: Movie
   selected: boolean
+  actionStatus?: string
   onToggle: () => void
-  onLike: () => void
+  onAction: (
+    action: "liked" | "watched" | "skipped" | "rated",
+    rating?: number,
+  ) => void
 }) {
   return (
     <div
@@ -478,15 +563,65 @@ function MovieCard({
           ))}
         </div>
 
-        <div className="flex gap-2">
-          <Button type="button" size="sm" variant={selected ? "default" : "outline"} onClick={onToggle}>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={selected ? "default" : "outline"}
+            title="Use this movie as a favorite input for Vector Search"
+            onClick={onToggle}
+          >
             {selected ? <Check /> : <Film />}
             {selected ? "Selected" : "Select"}
           </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={onLike}>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            title="Save a liked interaction and use it as a favorite signal"
+            onClick={() => onAction("liked", 9)}
+          >
             <Heart />
             Like
           </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            aria-label={`Mark ${movie.title} as watched`}
+            title="Save a watched interaction so recommendations can avoid or learn from it"
+            onClick={() => onAction("watched")}
+          >
+            <Eye />
+            <span className="sr-only">Watched</span>
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            aria-label={`Rate ${movie.title} 9 out of 10`}
+            title="Save a 9/10 rating interaction"
+            onClick={() => onAction("rated", 9)}
+          >
+            <Star />
+            <span className="sr-only">Rate 9/10</span>
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            aria-label={`Skip ${movie.title}`}
+            title="Save a skipped interaction"
+            onClick={() => onAction("skipped")}
+          >
+            <XCircle />
+            <span className="sr-only">Skip</span>
+          </Button>
+        </div>
+
+        <div className="text-muted-foreground flex min-h-5 flex-wrap gap-1 text-xs">
+          {selected ? <Badge variant="secondary">Favorite input</Badge> : null}
+          {actionStatus ? <Badge variant="outline">{actionStatus}</Badge> : null}
         </div>
       </div>
     </div>
@@ -495,9 +630,11 @@ function MovieCard({
 
 function RecommendationPanel({
   recommendation,
+  history,
   loading,
 }: {
   recommendation: RecommendationResponse | null
+  history: RecommendationHistory["items"]
   loading: boolean
 }) {
   return (
@@ -522,14 +659,25 @@ function RecommendationPanel({
           <>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <Signal label="Similar viewers" value={recommendation.input.collaborativeUserCount} />
+              <Signal
+                label="Behavior candidates"
+                value={recommendation.candidateSources.behavioralCandidates}
+              />
+              <Signal
+                label="Vector candidates"
+                value={recommendation.candidateSources.vectorCandidates}
+              />
               <Signal label="Results" value={recommendation.recommendations.length} />
             </div>
+            <Separator />
+            <PipelineExplanation recommendation={recommendation} />
             <Separator />
             <div className="space-y-3">
               {recommendation.recommendations.map((movie, index) => (
                 <RecommendationCard key={movie.id} movie={movie} rank={index + 1} />
               ))}
             </div>
+            <HistoryList history={history} />
           </>
         ) : (
           <div className="text-muted-foreground flex min-h-56 flex-col items-center justify-center gap-3 rounded-lg border border-dashed p-6 text-center text-sm">
@@ -539,6 +687,117 @@ function RecommendationPanel({
         )}
       </CardContent>
     </Card>
+  )
+}
+
+function PipelineExplanation({
+  recommendation,
+}: {
+  recommendation: RecommendationResponse
+}) {
+  const vectorWeight = Math.round(recommendation.scoringWeights.vector * 100)
+  const behaviorWeight = Math.round(recommendation.scoringWeights.collaborative * 100)
+  const qualityWeight = Math.round(
+    (recommendation.scoringWeights.rating +
+      recommendation.scoringWeights.genreOverlap +
+      recommendation.scoringWeights.popularity) *
+      100,
+  )
+  const behaviorActive = recommendation.candidateSources.behavioralCandidates > 0
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <Route className="size-4" />
+        How the engine ranked this
+      </div>
+      <div className="grid gap-2">
+        <PipelineStep
+          icon={Sparkles}
+          label="Semantic search"
+          value={`${recommendation.candidateSources.vectorCandidates} candidates`}
+          body="MongoDB Vector Search matched your mood text and favorite movie embeddings against movie vectors."
+        />
+        <PipelineStep
+          icon={Users}
+          label="Behavior matching"
+          value={
+            behaviorActive
+              ? `${recommendation.candidateSources.behavioralCandidates} candidates`
+              : "No behavior candidates"
+          }
+          body={
+            behaviorActive
+              ? "Aggregation Pipeline found viewers with overlapping likes, then expanded to movies they liked, rated, or watched."
+              : "Select or like favorite movies first to unlock similar-viewer collaborative filtering."
+          }
+        />
+        <PipelineStep
+          icon={GitMerge}
+          label="Blended ranking"
+          value={`${vectorWeight}% vector / ${behaviorWeight}% behavior / ${qualityWeight}% quality`}
+          body="The final score merges semantic similarity, collaborative behavior, IMDb rating, genre overlap, and popularity."
+        />
+      </div>
+    </div>
+  )
+}
+
+function PipelineStep({
+  icon: Icon,
+  label,
+  value,
+  body,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  value: string
+  body: string
+}) {
+  return (
+    <div className="rounded-lg border p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Icon className="text-primary size-4" />
+          {label}
+        </div>
+        <Badge variant="secondary">{value}</Badge>
+      </div>
+      <p className="text-muted-foreground mt-2 text-xs">{body}</p>
+    </div>
+  )
+}
+
+function HistoryList({ history }: { history: RecommendationHistory["items"] }) {
+  if (history.length === 0) {
+    return null
+  }
+
+  return (
+    <>
+      <Separator />
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Clock3 className="size-4" />
+          Recent runs
+        </div>
+        <div className="space-y-2">
+          {history.slice(0, 3).map((item) => (
+            <div key={item.id} className="rounded-lg border p-3 text-xs">
+              <div className="text-muted-foreground">
+                {new Date(item.createdAt).toLocaleString()}
+              </div>
+              <div className="mt-1 font-medium">
+                {item.recommendedMovies
+                  .slice(0, 3)
+                  .map((movie) => movie.title)
+                  .join(", ") || "No recommendations"}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
   )
 }
 
@@ -566,10 +825,23 @@ function RecommendationCard({ movie, rank }: { movie: Recommendation; rank: numb
 
           <div className="grid grid-cols-2 gap-1 text-xs">
             <Score label="Vector" value={movie.score.vector} />
-            <Score label="Collab" value={movie.score.collaborative} />
+            <Score label="Behavior" value={movie.score.collaborative} />
             <Score label="Genre" value={movie.score.genreOverlap} />
             <Score label="Rating" value={movie.score.rating} />
           </div>
+
+          {movie.evidence.similarViewerCount > 0 ? (
+            <div className="text-muted-foreground flex flex-wrap gap-1 text-xs">
+              <Badge variant="secondary">
+                {movie.evidence.similarViewerCount} similar viewers
+              </Badge>
+              <Badge variant="outline">{movie.evidence.likedBySimilar} likes</Badge>
+              <Badge variant="outline">{movie.evidence.watchedBySimilar} watched</Badge>
+              {movie.evidence.ratedBySimilar > 0 ? (
+                <Badge variant="outline">{movie.evidence.ratedBySimilar} ratings</Badge>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
       <ul className="text-muted-foreground mt-3 space-y-1 text-xs">

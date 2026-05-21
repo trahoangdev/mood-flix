@@ -98,7 +98,10 @@ export async function getMovieMeta() {
   const collection = await moviesCollection();
   const [genreRows, yearBounds, ratingBounds, total] = await Promise.all([
     collection
-      .aggregate<{ _id: string; count: number }>([
+      .aggregate<{
+        _id: string;
+        count: number;
+      }>([
         { $unwind: "$genres" },
         { $group: { _id: "$genres", count: { $sum: 1 } } },
         { $sort: { count: -1, _id: 1 } },
@@ -147,7 +150,9 @@ export async function getMovieMeta() {
   };
 }
 
-function buildMovieFilter(query: z.infer<typeof listMoviesQuerySchema>): Filter<MovieDoc> {
+function buildMovieFilter(
+  query: z.infer<typeof listMoviesQuerySchema>,
+): Filter<MovieDoc> {
   const filter: Filter<MovieDoc> = {};
 
   if (query.genre) {

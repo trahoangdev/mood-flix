@@ -35,7 +35,9 @@ export async function createTextEmbedding(input: string): Promise<number[]> {
   return embedding;
 }
 
-export async function createTextEmbeddings(inputs: string[]): Promise<number[][]> {
+export async function createTextEmbeddings(
+  inputs: string[],
+): Promise<number[][]> {
   const cleanInputs = inputs.map(normalizeEmbeddingInput);
 
   if (cleanInputs.length === 0) {
@@ -71,7 +73,9 @@ export function buildMovieEmbeddingText(movie: {
     movie.genres?.length ? `Genres: ${movie.genres.join(", ")}` : null,
     movie.directors?.length ? `Directors: ${movie.directors.join(", ")}` : null,
     movie.cast?.length ? `Cast: ${movie.cast.slice(0, 8).join(", ")}` : null,
-    movie.plot || movie.fullplot ? `Story: ${movie.plot ?? movie.fullplot}` : null,
+    movie.plot || movie.fullplot
+      ? `Story: ${movie.plot ?? movie.fullplot}`
+      : null,
   ].filter(Boolean);
 
   return normalizeEmbeddingInput(parts.join("\n"));

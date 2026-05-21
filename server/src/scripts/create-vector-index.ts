@@ -7,10 +7,13 @@ async function main() {
   const collection = await moviesCollection();
   const dimensions =
     env.OPENAI_EMBEDDING_DIMENSIONS ??
-    (await createTextEmbedding("dimension probe for vector search index")).length;
+    (await createTextEmbedding("dimension probe for vector search index"))
+      .length;
 
   const existingIndexes = await collection.listSearchIndexes().toArray();
-  const existing = existingIndexes.find((index) => index.name === env.VECTOR_INDEX_NAME);
+  const existing = existingIndexes.find(
+    (index) => index.name === env.VECTOR_INDEX_NAME,
+  );
 
   if (existing) {
     const existingStatus =

@@ -17,29 +17,46 @@ export async function getSystemReadiness() {
   const interactions = await interactionsCollection();
   const logs = await recommendationLogsCollection();
 
-  const [movieCount, embeddedMovieCount, userCount, interactionCount, logCount, indexes] =
-    await Promise.all([
-      movies.countDocuments(),
-      movies.countDocuments({
-        [env.MOVIE_EMBEDDING_FIELD]: { $exists: true, $type: "array" },
-      }),
-      users.countDocuments(),
-      interactions.countDocuments(),
-      logs.countDocuments(),
-      movies.listSearchIndexes().toArray().catch(() => []),
-    ]);
+  const [
+    movieCount,
+    embeddedMovieCount,
+    userCount,
+    interactionCount,
+    logCount,
+    indexes,
+  ] = await Promise.all([
+    movies.countDocuments(),
+    movies.countDocuments({
+      [env.MOVIE_EMBEDDING_FIELD]: { $exists: true, $type: "array" },
+    }),
+    users.countDocuments(),
+    interactions.countDocuments(),
+    logs.countDocuments(),
+    movies
+      .listSearchIndexes()
+      .toArray()
+      .catch(() => []),
+  ]);
 
-  const vectorIndex = indexes.find((index) => index.name === env.VECTOR_INDEX_NAME);
+  const vectorIndex = indexes.find(
+    (index) => index.name === env.VECTOR_INDEX_NAME,
+  );
   const vectorIndexStatus =
-    vectorIndex && "status" in vectorIndex && typeof vectorIndex.status === "string"
+    vectorIndex &&
+    "status" in vectorIndex &&
+    typeof vectorIndex.status === "string"
       ? vectorIndex.status
       : null;
   const vectorIndexQueryable =
-    vectorIndex && "queryable" in vectorIndex && typeof vectorIndex.queryable === "boolean"
+    vectorIndex &&
+    "queryable" in vectorIndex &&
+    typeof vectorIndex.queryable === "boolean"
       ? vectorIndex.queryable
       : null;
   const embeddingCoverage =
-    movieCount > 0 ? Math.round((embeddedMovieCount / movieCount) * 1000) / 1000 : 0;
+    movieCount > 0
+      ? Math.round((embeddedMovieCount / movieCount) * 1000) / 1000
+      : 0;
 
   return {
     status:

@@ -6,7 +6,11 @@ import { closeMongoConnection } from "../db/mongo";
 async function main() {
   const collection = await moviesCollection();
   await collection.createIndex({ slug: 1 }, { unique: true });
-  await collection.createIndex({ title: "text", plot: "text", fullplot: "text" });
+  await collection.createIndex({
+    title: "text",
+    plot: "text",
+    fullplot: "text",
+  });
   await collection.createIndex({ genres: 1, year: -1, "imdb.rating": -1 });
 
   const now = new Date();

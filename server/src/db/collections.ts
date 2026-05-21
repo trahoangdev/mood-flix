@@ -16,8 +16,12 @@ export async function usersCollection(): Promise<Collection<UserDoc>> {
   return (await getDb()).collection<UserDoc>(env.USERS_COLLECTION);
 }
 
-export async function interactionsCollection(): Promise<Collection<InteractionDoc>> {
-  return (await getDb()).collection<InteractionDoc>(env.INTERACTIONS_COLLECTION);
+export async function interactionsCollection(): Promise<
+  Collection<InteractionDoc>
+> {
+  return (await getDb()).collection<InteractionDoc>(
+    env.INTERACTIONS_COLLECTION,
+  );
 }
 
 export async function recommendationLogsCollection(): Promise<

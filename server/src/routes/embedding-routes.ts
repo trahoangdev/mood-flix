@@ -1,7 +1,10 @@
 import { Router } from "express";
 import { env } from "../config/env";
 import { asyncHandler } from "../middleware/async-handler";
-import { createTextEmbedding, hasOpenAIEmbeddingConfig } from "../services/embedding-service";
+import {
+  createTextEmbedding,
+  hasOpenAIEmbeddingConfig,
+} from "../services/embedding-service";
 
 export const embeddingRoutes = Router();
 

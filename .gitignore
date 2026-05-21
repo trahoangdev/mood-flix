@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.npm-cache/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+.turbo/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs and coverage
+*.log
+coverage/
+*.lcov
+
+# TypeScript / tool caches
+*.tsbuildinfo
+.eslintcache
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
