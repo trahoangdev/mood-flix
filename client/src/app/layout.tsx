@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 import { ThemeProvider } from "@/components/theme-provider";
-import { inter } from "@/lib/fonts";
+import { bodyFont, displayFont } from "@/lib/fonts";
 
 export const metadata: Metadata = {
   title: "MoodFlix",
@@ -15,9 +15,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} antialiased`}>
-      <body className={inter.className}>
-        <ThemeProvider defaultTheme="system" storageKey="nextjs-ui-theme">
+    <html lang="en" className={`${bodyFont.variable} ${displayFont.variable} antialiased`}>
+      <body className={bodyFont.className}>
+        <ThemeProvider defaultTheme="light" storageKey="nextjs-ui-theme">
           {children}
         </ThemeProvider>
       </body>

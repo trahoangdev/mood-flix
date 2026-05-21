@@ -6,13 +6,15 @@ import { ModeToggle } from "@/components/mode-toggle"
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
-      <div className="flex h-14 items-center gap-3 px-4 lg:px-6">
-        <Link href="/dashboard" className="flex min-w-0 items-center gap-2 font-semibold">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+    <header className="sticky top-0 z-30 border-b-2 bg-background/95 backdrop-blur">
+      <div className="mx-auto flex h-20 max-w-[1200px] items-center gap-3 px-4 lg:px-6">
+        <Link href="/" className="flex min-w-0 items-center gap-3 font-semibold">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-[24px] border-2 border-foreground bg-primary text-primary-foreground">
             <Clapperboard className="size-4" />
           </span>
-          <span className="truncate">MoodFlix</span>
+          <span className="font-display truncate text-3xl tracking-[0.02em] uppercase">
+            MoodFlix
+          </span>
         </Link>
         <div className="ml-auto flex items-center gap-2">
           <Button variant="ghost" asChild size="sm" className="hidden sm:flex">

@@ -3,7 +3,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: var(--font-inter);
+  --font-sans: var(--font-body);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -42,72 +42,66 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --color-basalt-canvas: #e2e2df;
+  --color-ash-white: #f7f6f2;
+  --color-abyssal-ink: #070607;
+  --color-pure-white: #ffffff;
+  --color-digital-orange: #fc5000;
+  --color-cyber-violet: #524ae9;
+  --color-pixel-glare: #f5f28e;
+
+  --radius: 2.5rem;
+  --background: #e2e2df;
+  --foreground: #070607;
+  --card: #f7f6f2;
+  --card-foreground: #070607;
+  --popover: #f7f6f2;
+  --popover-foreground: #070607;
+  --primary: #fc5000;
+  --primary-foreground: #ffffff;
+  --secondary: #f7f6f2;
+  --secondary-foreground: #070607;
+  --muted: #d4d4cf;
+  --muted-foreground: #4e4b47;
+  --accent: #f5f28e;
+  --accent-foreground: #070607;
+  --destructive: #be1f12;
+  --border: #070607;
+  --input: #070607;
+  --ring: #fc5000;
+  --chart-1: #fc5000;
+  --chart-2: #524ae9;
+  --chart-3: #f5f28e;
+  --chart-4: #070607;
+  --chart-5: #f7f6f2;
+  --sidebar: #f7f6f2;
+  --sidebar-foreground: #070607;
+  --sidebar-primary: #fc5000;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f5f28e;
+  --sidebar-accent-foreground: #070607;
+  --sidebar-border: #070607;
+  --sidebar-ring: #fc5000;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #070607;
+  --foreground: #f7f6f2;
+  --card: #151314;
+  --card-foreground: #f7f6f2;
+  --popover: #151314;
+  --popover-foreground: #f7f6f2;
+  --primary: #fc5000;
+  --primary-foreground: #ffffff;
+  --secondary: #242120;
+  --secondary-foreground: #f7f6f2;
+  --muted: #242120;
+  --muted-foreground: #c5c1b9;
+  --accent: #f5f28e;
+  --accent-foreground: #070607;
+  --border: #f7f6f2;
+  --input: #f7f6f2;
+  --ring: #fc5000;
 }
 
 @layer base {
@@ -118,6 +112,91 @@
     @apply bg-background text-foreground;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-weight: 500;
+  }
+}
+
+@layer components {
+  [data-slot="card"] {
+    border-width: 2px;
+    box-shadow: none;
+  }
+
+  [data-slot="card-title"],
+  .font-display {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    line-height: 0.95;
+    text-transform: uppercase;
+  }
+
+  [data-slot="button"] {
+    border-radius: 800px;
+    min-height: 44px;
+    border-width: 2px;
+  }
+
+  [data-slot="badge"] {
+    border-width: 2px;
+    border-radius: 800px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  input,
+  textarea,
+  button[role="combobox"] {
+    border-width: 2px !important;
+    border-radius: 32px !important;
+    box-shadow: none !important;
+  }
+
+  .caldera-shell {
+    background:
+      linear-gradient(90deg, rgb(7 6 7 / 0.035) 1px, transparent 1px),
+      linear-gradient(rgb(7 6 7 / 0.035) 1px, transparent 1px),
+      var(--color-basalt-canvas);
+    background-size: 20px 20px;
+  }
+
+  .caldera-hero {
+    position: relative;
+    overflow: hidden;
+    border: 2px solid var(--color-abyssal-ink);
+    border-radius: 40px;
+    background: var(--color-ash-white);
+  }
+
+  .caldera-hero::after {
+    content: "";
+    position: absolute;
+    right: -48px;
+    top: -64px;
+    width: 280px;
+    height: 220px;
+    background:
+      linear-gradient(90deg, var(--color-digital-orange) 0 50%, var(--color-cyber-violet) 50% 100%);
+    clip-path: polygon(0 18%, 72% 0, 100% 54%, 62% 100%, 10% 82%);
+    image-rendering: pixelated;
+    opacity: 0.95;
+    transform: rotate(8deg);
+  }
+
+  .caldera-panel {
+    border: 2px solid var(--color-abyssal-ink);
+    border-radius: 40px;
+    background: var(--color-ash-white);
+  }
+
+  .caldera-orange {
+    background: var(--color-digital-orange);
+    color: var(--color-pure-white);
+  }
+
+  .caldera-violet {
+    background: var(--color-cyber-violet);
+    color: var(--color-pure-white);
   }
 }
 
@@ -131,4 +210,9 @@
 /* Smooth scrolling for the entire page */
 html {
   scroll-behavior: smooth;
+}
+
+::selection {
+  background: var(--color-pixel-glare);
+  color: var(--color-abyssal-ink);
 }

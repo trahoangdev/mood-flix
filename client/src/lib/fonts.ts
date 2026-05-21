@@ -1,8 +1,15 @@
-import { Inter } from 'next/font/google'
+import { Bebas_Neue, DM_Sans } from "next/font/google"
 
-// Configure Inter font to match exactly what Next.js optimizes for
-export const inter = Inter({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-inter',
+export const displayFont = Bebas_Neue({
+  subsets: ["latin"],
+  weight: "400",
+  display: "swap",
+  variable: "--font-display",
+})
+
+export const bodyFont = DM_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-body",
 })

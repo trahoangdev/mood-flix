@@ -54,9 +54,17 @@ export async function listMovies(params = new URLSearchParams({ limit: "12" })) 
   }>(`/api/movies?${params.toString()}`)
 }
 
-export async function searchMovies(query: string, limit = 8) {
-  return request<{ items: Movie[] }>(
-    `/api/movies/search?q=${encodeURIComponent(query)}&limit=${limit}`,
+export async function searchMovies(query: string, limit = 8, skip = 0) {
+  return request<{
+    items: Movie[]
+    pagination: {
+      total: number
+      limit: number
+      skip: number
+      hasMore: boolean
+    }
+  }>(
+    `/api/movies/search?q=${encodeURIComponent(query)}&limit=${limit}&skip=${skip}`,
   )
 }
 

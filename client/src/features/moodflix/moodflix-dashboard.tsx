@@ -68,6 +68,7 @@ import type {
 
 const DEFAULT_PROMPT =
   "I want an emotional science fiction movie about memory, family, and human connection."
+const MOVIES_PER_PAGE = 9
 
 function parseOptionalYear(value: string): number | undefined {
   const trimmed = value.trim()
@@ -85,6 +86,11 @@ export function MoodflixDashboard() {
   const [readiness, setReadiness] = React.useState<Readiness | null>(null)
   const [meta, setMeta] = React.useState<MovieMeta | null>(null)
   const [movies, setMovies] = React.useState<Movie[]>([])
+  const [movieListLabel, setMovieListLabel] = React.useState("Top rated movies")
+  const [movieResultCount, setMovieResultCount] = React.useState<number | null>(null)
+  const [moviePage, setMoviePage] = React.useState(0)
+  const [movieHasMore, setMovieHasMore] = React.useState(false)
+  const [movieListMode, setMovieListMode] = React.useState<"top" | "all" | "search">("top")
   const [searchQuery, setSearchQuery] = React.useState("")
   const [selectedMovies, setSelectedMovies] = React.useState<Movie[]>([])
   const [preferenceText, setPreferenceText] = React.useState(DEFAULT_PROMPT)
@@ -112,7 +118,9 @@ export function MoodflixDashboard() {
         const [readinessData, metaData, moviesData] = await Promise.all([
           getReadiness(),
           getMovieMeta(),
-          listMovies(new URLSearchParams({ limit: "12", sort: "rating_desc" })),
+          listMovies(
+            new URLSearchParams({ limit: String(MOVIES_PER_PAGE), sort: "rating_desc" }),
+          ),
         ])
 
         if (cancelled) {
@@ -122,6 +130,8 @@ export function MoodflixDashboard() {
         setReadiness(readinessData)
         setMeta(metaData)
         setMovies(moviesData.items)
+        setMovieResultCount(moviesData.pagination.total)
+        setMovieHasMore(moviesData.pagination.hasMore)
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Unable to load MoodFlix data")
@@ -144,21 +154,53 @@ export function MoodflixDashboard() {
     const query = searchQuery.trim()
 
     if (!query) {
-      const data = await listMovies(new URLSearchParams({ limit: "12", sort: "rating_desc" }))
-      setMovies(data.items)
+      await loadMoviePage("all", 0)
       return
     }
 
+    await loadMoviePage("search", 0, query)
+  }
+
+  async function loadMoviePage(
+    mode: "top" | "all" | "search",
+    page: number,
+    query = searchQuery.trim(),
+  ) {
     try {
       setSearching(true)
       setError(null)
-      const data = await searchMovies(query)
+      const skip = page * MOVIES_PER_PAGE
+      const data =
+        mode === "search"
+          ? await searchMovies(query, MOVIES_PER_PAGE, skip)
+          : await listMovies(
+              new URLSearchParams({
+                limit: String(MOVIES_PER_PAGE),
+                skip: String(skip),
+                sort: mode === "top" ? "rating_desc" : "title",
+              }),
+            )
       setMovies(data.items)
+      setMovieListMode(mode)
+      setMoviePage(page)
+      setMovieHasMore(data.pagination.hasMore)
+      setMovieResultCount(data.pagination.total)
+      setMovieListLabel(
+        mode === "search"
+          ? `Search results for "${query}"`
+          : mode === "all"
+            ? "All movies"
+            : "Top rated movies",
+      )
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Search failed")
+      setError(err instanceof Error ? err.message : "Unable to load movies")
     } finally {
       setSearching(false)
     }
+  }
+
+  function handleMoviePageChange(nextPage: number) {
+    void loadMoviePage(movieListMode, nextPage)
   }
 
   function toggleSelectedMovie(movie: Movie) {
@@ -258,21 +300,23 @@ export function MoodflixDashboard() {
 
   return (
     <>
-      <div className="px-4 lg:px-6">
-        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-          <div className="flex flex-col gap-2">
+      <div className="caldera-hero p-8">
+        <div className="relative z-10 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+          <div className="flex max-w-2xl flex-col gap-4">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight">MoodFlix</h1>
+              <h1 className="font-display text-6xl leading-[0.9] tracking-[0.02em] uppercase md:text-8xl">
+                MoodFlix
+              </h1>
               <Badge variant={readiness?.status === "ready" ? "default" : "secondary"}>
                 {readiness?.status === "ready" ? "Ready" : "Checking"}
               </Badge>
             </div>
-            <p className="text-muted-foreground">
+            <p className="max-w-xl text-base leading-relaxed text-muted-foreground">
               Movie recommendations powered by MongoDB Vector Search, Aggregation Pipeline,
               and OpenAI embeddings.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid gap-3 sm:grid-cols-3 md:grid-cols-1">
             <MetricBadge icon={Database} label="Movies" value={readiness?.collections.movies.count} />
             <MetricBadge
               icon={Brain}
@@ -288,15 +332,15 @@ export function MoodflixDashboard() {
         </div>
       </div>
 
-      <div className="@container/main px-4 lg:px-6">
+      <div className="@container/main">
         {error && (
           <Card className="mb-4 border-destructive/50">
             <CardContent className="text-sm text-destructive">{error}</CardContent>
           </Card>
         )}
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-          <div className="space-y-4">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <div>
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -429,8 +473,22 @@ export function MoodflixDashboard() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
+          </div>
+
+          <div className="space-y-6">
+            <SystemCard readiness={readiness} demoUser={demoUser} />
+            <RecommendationPanel
+              recommendation={recommendation}
+              history={history}
+              loading={recommending}
+            />
+          </div>
+        </div>
+
+        <Card className="mt-6">
+          <CardHeader>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
                 <CardTitle className="flex items-center gap-2">
                   <Search className="size-5" />
                   Movie discovery
@@ -438,29 +496,56 @@ export function MoodflixDashboard() {
                 <CardDescription>
                   Search movies, select favorites, or record demo interactions.
                 </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        void handleSearch()
-                      }
-                    }}
-                    placeholder="Search Arrival, Inception, Coco..."
-                  />
-                  <Button type="button" variant="outline" onClick={handleSearch} disabled={searching}>
-                    {searching ? <Loader2 className="animate-spin" /> : <Search />}
-                    Search
-                  </Button>
-                </div>
+              </div>
+              <Badge variant="secondary">
+                {movieResultCount ?? movies.length}
+                {meta?.totalMovies ? ` / ${meta.totalMovies}` : ""} movies
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    void handleSearch()
+                  }
+                }}
+                placeholder="Search Arrival, Inception, Coco..."
+              />
+              <Button type="button" variant="outline" onClick={handleSearch} disabled={searching}>
+                {searching ? <Loader2 className="animate-spin" /> : <Search />}
+                Search
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="shrink-0"
+                onClick={() => void loadMoviePage("all", 0)}
+                disabled={searching}
+              >
+                All movies
+              </Button>
+            </div>
 
-                {loading ? (
-                  <MovieGridSkeleton />
+            {loading ? (
+              <MovieGridSkeleton />
+            ) : (
+              <>
+                <div className="text-muted-foreground flex flex-wrap items-center justify-between gap-3 text-sm">
+                  <span>{movieListLabel}</span>
+                  <span>
+                    Page {moviePage + 1} · {movies.length} shown
+                  </span>
+                </div>
+                {movies.length === 0 ? (
+                  <div className="text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
+                    No movies matched this search.
+                  </div>
                 ) : (
-                  <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                     {movies.map((movie) => (
                       <MovieCard
                         key={movie.id}
@@ -475,19 +560,33 @@ export function MoodflixDashboard() {
                     ))}
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="space-y-4">
-            <SystemCard readiness={readiness} demoUser={demoUser} />
-            <RecommendationPanel
-              recommendation={recommendation}
-              history={history}
-              loading={recommending}
-            />
-          </div>
-        </div>
+                <div className="flex items-center justify-between gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={searching || moviePage === 0}
+                    onClick={() => handleMoviePageChange(moviePage - 1)}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-muted-foreground text-xs">
+                    {movieResultCount ?? 0} total · {MOVIES_PER_PAGE} per page
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={searching || !movieHasMore}
+                    onClick={() => handleMoviePageChange(moviePage + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </>
   )
@@ -503,10 +602,14 @@ function MetricBadge({
   value: number | undefined
 }) {
   return (
-    <div className="bg-card text-card-foreground flex items-center gap-2 rounded-md border px-3 py-2 text-sm shadow-sm">
-      <Icon className="text-muted-foreground size-4" />
+    <div className="flex min-w-36 items-center gap-3 rounded-[32px] border-2 bg-card px-4 py-3 text-sm">
+      <span className="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground">
+        <Icon className="size-4" />
+      </span>
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium">{value ?? "-"}</span>
+      <span className="ml-auto font-display text-3xl leading-none tracking-[0.02em]">
+        {value ?? "-"}
+      </span>
     </div>
   )
 }
@@ -528,103 +631,109 @@ function MovieCard({
   ) => void
 }) {
   return (
-    <div
+    <article
       className={cn(
-        "bg-card grid grid-cols-[72px_1fr] gap-3 rounded-lg border p-3 shadow-sm transition-colors",
+        "bg-card flex min-w-0 flex-col gap-3 rounded-[28px] border-2 p-3 transition-colors",
         selected && "border-primary",
       )}
     >
-      <Poster movie={movie} className="h-28 w-[72px]" />
-      <div className="min-w-0 space-y-2">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h3 className="truncate text-sm font-medium">{movie.title}</h3>
-            <p className="text-muted-foreground text-xs">
-              {[movie.year, movie.runtime ? `${movie.runtime}m` : null]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
+      <div className="grid min-w-0 grid-cols-[82px_minmax(0,1fr)] gap-3">
+        <Poster movie={movie} className="h-[122px] w-[82px]" />
+        <div className="flex min-w-0 flex-col gap-2">
+          <div className="flex min-w-0 items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="truncate text-base font-semibold leading-tight">{movie.title}</h3>
+              <p className="text-muted-foreground text-xs">
+                {[movie.year, movie.runtime ? `${movie.runtime}m` : null]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            </div>
+            {movie.imdbRating ? (
+              <Badge variant="outline" className="px-2 py-1">
+                <Star className="fill-current" />
+                {movie.imdbRating}
+              </Badge>
+            ) : null}
           </div>
-          {movie.imdbRating ? (
-            <Badge variant="outline">
-              <Star className="fill-current" />
-              {movie.imdbRating}
-            </Badge>
-          ) : null}
-        </div>
 
-        <p className="text-muted-foreground line-clamp-2 text-xs">{movie.plot}</p>
+          <p className="text-muted-foreground line-clamp-3 text-xs leading-relaxed">
+            {movie.plot}
+          </p>
 
-        <div className="flex flex-wrap gap-1">
-          {movie.genres.slice(0, 3).map((genre) => (
-            <Badge key={genre} variant="secondary">
-              {genre}
-            </Badge>
-          ))}
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant={selected ? "default" : "outline"}
-            title="Use this movie as a favorite input for Vector Search"
-            onClick={onToggle}
-          >
-            {selected ? <Check /> : <Film />}
-            {selected ? "Selected" : "Select"}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            title="Save a liked interaction and use it as a favorite signal"
-            onClick={() => onAction("liked", 9)}
-          >
-            <Heart />
-            Like
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            aria-label={`Mark ${movie.title} as watched`}
-            title="Save a watched interaction so recommendations can avoid or learn from it"
-            onClick={() => onAction("watched")}
-          >
-            <Eye />
-            <span className="sr-only">Watched</span>
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            aria-label={`Rate ${movie.title} 9 out of 10`}
-            title="Save a 9/10 rating interaction"
-            onClick={() => onAction("rated", 9)}
-          >
-            <Star />
-            <span className="sr-only">Rate 9/10</span>
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            aria-label={`Skip ${movie.title}`}
-            title="Save a skipped interaction"
-            onClick={() => onAction("skipped")}
-          >
-            <XCircle />
-            <span className="sr-only">Skip</span>
-          </Button>
-        </div>
-
-        <div className="text-muted-foreground flex min-h-5 flex-wrap gap-1 text-xs">
-          {selected ? <Badge variant="secondary">Favorite input</Badge> : null}
-          {actionStatus ? <Badge variant="outline">{actionStatus}</Badge> : null}
+          <div className="mt-auto flex flex-wrap gap-1.5">
+            {movie.genres.slice(0, 3).map((genre) => (
+              <Badge key={genre} variant="secondary" className="max-w-full">
+                {genre}
+              </Badge>
+            ))}
+          </div>
         </div>
       </div>
-    </div>
+
+      <div className="grid min-w-0 grid-cols-4 items-center gap-1.5 min-[370px]:grid-cols-[minmax(7rem,1fr)_36px_36px_36px_36px]">
+        <Button
+          type="button"
+          size="sm"
+          variant={selected ? "default" : "outline"}
+          className="col-span-4 h-9 min-h-9 px-3 text-xs min-[370px]:col-span-1"
+          title="Use this movie as a favorite input for Vector Search"
+          onClick={onToggle}
+        >
+          {selected ? <Check /> : <Film />}
+          {selected ? "Selected" : "Select"}
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="size-9 min-h-9 justify-self-center"
+          aria-label={`Like ${movie.title}`}
+          title="Save a liked interaction and use it as a favorite signal"
+          onClick={() => onAction("liked", 9)}
+        >
+          <Heart />
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="size-9 min-h-9 justify-self-center"
+          aria-label={`Mark ${movie.title} as watched`}
+          title="Save a watched interaction so recommendations can avoid or learn from it"
+          onClick={() => onAction("watched")}
+        >
+          <Eye />
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="size-9 min-h-9 justify-self-center"
+          aria-label={`Rate ${movie.title} 9 out of 10`}
+          title="Save a 9/10 rating interaction"
+          onClick={() => onAction("rated", 9)}
+        >
+          <Star />
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="size-9 min-h-9 justify-self-center"
+          aria-label={`Skip ${movie.title}`}
+          title="Save a skipped interaction"
+          onClick={() => onAction("skipped")}
+        >
+          <XCircle />
+        </Button>
+      </div>
+
+      <div className="text-muted-foreground flex min-h-5 min-w-0 flex-wrap gap-1 text-xs">
+        {selected ? <Badge variant="secondary">Favorite input</Badge> : null}
+        {actionStatus ? <Badge variant="outline">{actionStatus}</Badge> : null}
+      </div>
+    </article>
   )
 }
 
@@ -962,8 +1071,9 @@ function Poster({
       unoptimized
       src={movie.poster}
       alt={`${movie.title} poster`}
-      width={72}
-      height={112}
+      width={82}
+      height={122}
+      loading="eager"
       className={cn("shrink-0 rounded-md border object-cover", className)}
     />
   )
@@ -971,7 +1081,7 @@ function Poster({
 
 function MovieGridSkeleton() {
   return (
-    <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       {Array.from({ length: 6 }).map((_, index) => (
         <Skeleton key={index} className="h-32 rounded-lg" />
       ))}

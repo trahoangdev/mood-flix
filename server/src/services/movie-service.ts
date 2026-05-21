@@ -20,7 +20,8 @@ export const listMoviesQuerySchema = z.object({
 
 export const searchMoviesQuerySchema = z.object({
   q: z.string().trim().min(1),
-  limit: z.coerce.number().int().min(1).max(50).default(12),
+  limit: z.coerce.number().int().min(1).max(50).default(8),
+  skip: z.coerce.number().int().min(0).default(0),
 });
 
 export async function listMovies(rawQuery: unknown) {
@@ -66,14 +67,24 @@ export async function searchMovies(rawQuery: unknown) {
     ],
   };
 
-  const items = await collection
-    .find(filter, { projection: movieSummaryProjection() })
-    .sort({ "imdb.rating": -1, "imdb.votes": -1, year: -1 })
-    .limit(query.limit)
-    .toArray();
+  const [items, total] = await Promise.all([
+    collection
+      .find(filter, { projection: movieSummaryProjection() })
+      .sort({ "imdb.rating": -1, "imdb.votes": -1, year: -1 })
+      .skip(query.skip)
+      .limit(query.limit)
+      .toArray(),
+    collection.countDocuments(filter),
+  ]);
 
   return {
     items: items.map(toMovieSummary),
+    pagination: {
+      total,
+      limit: query.limit,
+      skip: query.skip,
+      hasMore: query.skip + items.length < total,
+    },
   };
 }
 
